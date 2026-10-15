@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Files, step by step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&family=Atkinson+Hyperlegible+Next:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: code on the left; on the right the file itself with a moving cursor, then variables and output.
+   Same palette and type as the "Lists in memory" page so the two sit side by side in lecture. */
+:root{
+  --bg:#F5F6F8; --panel:#FFFFFF; --tab:#EEF0F3; --ink:#1C2230; --muted:#737B8C; --rule:#D3D8E0;
+  --str:#596173; --dim:#BCC1CB; --hl:#FFE36E;
+  --sans:"Atkinson Hyperlegible Next","Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Atkinson Hyperlegible Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13161C; --panel:#1B1F27; --tab:#222731; --ink:#E6E8ED; --muted:#8C93A2; --rule:#343B47;
+    --str:#A9B0BE; --dim:#4E5562; --hl:rgba(242,203,72,.34); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13161C; --panel:#1B1F27; --tab:#222731; --ink:#E6E8ED; --muted:#8C93A2; --rule:#343B47;
+  --str:#A9B0BE; --dim:#4E5562; --hl:rgba(242,203,72,.34); color-scheme:dark;
+}
+html{height:100%}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.4}
+.app{max-width:2000px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:clamp(12px,1.8vw,26px);display:flex;flex-direction:column;gap:clamp(12px,1.4vw,18px)}
+
+/* top bar */
+.tabs{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center}
+.group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.glabel{font-size:15px;color:var(--muted)}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--rule);border-radius:9px;overflow:hidden;background:var(--panel)}
+.seg button{font:inherit;font-size:15px;border:0;background:transparent;color:var(--muted);padding:.5em .95em;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button code{font-family:var(--mono);font-size:.95em}
+
+.question{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:17px}
+.question p{margin:0;max-width:85ch}
+.question code{font-family:var(--mono);font-size:.92em;background:var(--panel);border:1px solid var(--rule);border-radius:5px;padding:0 .3em;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:var(--mono);font-size:15px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:999px;padding:.25em .85em;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.link{font:inherit;font-size:15px;color:var(--ink);background:none;border:0;padding:.2em 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--rule)}
+.link:hover{text-decoration-color:var(--ink)}
+
+/* main */
+.main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(12px,1.4vw,20px);align-items:start}
+@media (max-width:1000px){.main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:12px;min-width:0}
+
+/* code */
+.code{font-family:var(--mono);font-size:clamp(14px,1.08vw,22px);padding:1em 1.4em 1em 0;overflow-x:auto;--row:1.85em}
+.lines{position:relative;min-width:max-content}
+.hl{position:absolute;left:0;right:0;top:0;height:var(--row);background:var(--hl);
+    transform:translateY(calc(var(--line,0) * var(--row)));transition:transform .3s cubic-bezier(.3,.7,.2,1)}
+.line{position:relative;height:var(--row);line-height:var(--row);white-space:pre;display:flex;align-items:center}
+.ln{flex:none;width:2.9em;padding-right:1em;text-align:right;color:var(--muted);user-select:none}
+.line.cur .ln{color:var(--ink);font-weight:700}
+.k{font-weight:700}
+.s{color:var(--str)}
+.note{padding-left:2em;opacity:.75}
+.note.err{opacity:1;font-weight:700}
+
+/* state */
+.state{padding:1.1em 1.3em 1.3em;display:flex;flex-direction:column;gap:1.1em}
+.plabel{font-size:15px;color:var(--muted);margin-bottom:.4em}
+
+/* the file, drawn like the editor tab on the slides */
+.file{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--panel);transition:opacity .2s}
+.fhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.4em 1em;padding:.5em .9em;border-bottom:1px solid var(--rule);background:var(--tab)}
+.fname{font-family:var(--mono);font-weight:700;font-size:16px}
+.legend{display:flex;flex-wrap:wrap;gap:.3em 1.1em;font-size:14px;color:var(--muted);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:.4em}
+.sw{display:inline-block;width:1.1em;height:.9em;border-radius:2px;background:var(--hl)}
+.sw.d{background:none;color:var(--dim);font-family:var(--mono);font-weight:700;width:auto;height:auto;line-height:1}
+.fbody{font-family:var(--mono);font-size:clamp(16px,1.35vw,26px);padding:.45em 1em .45em 0;overflow-x:auto}
+.frow{display:flex;line-height:1.75;white-space:pre;min-width:max-content}
+.fln{flex:none;width:2.7em;text-align:right;padding-right:.9em;color:var(--muted);user-select:none}
+.done{color:var(--dim)}
+.got{background:var(--hl);color:var(--ink);border-radius:2px}
+.nl{font-size:.6em;color:var(--muted);padding-left:.12em;vertical-align:.1em}
+.done .nl{color:var(--dim)}
+.caret{display:inline-block;width:0;height:1.3em;border-left:3px solid var(--ink);vertical-align:-.28em;margin:0 -1.5px;position:relative;z-index:1}
+.fpos{padding:.6em .9em;border-top:1px solid var(--rule);font-size:clamp(16px,1.1vw,20px);display:flex;flex-direction:column;gap:.25em}
+.fpos .readnow{color:var(--muted);font-size:.92em}
+.fpos code{font-family:var(--mono);color:var(--ink);background:linear-gradient(transparent 55%,var(--hl) 55%);overflow-wrap:anywhere}
+.file.closed .fbody{opacity:.4}
+.file.unopened .fbody{opacity:.55}
+
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.2em}
+@container (max-width:520px){.lower{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:620px){.lower{grid-template-columns:minmax(0,1fr)}}
+.vars{font-family:var(--mono);font-size:clamp(15px,1.15vw,21px)}
+.frame{border:1.5px solid var(--rule);border-radius:8px;padding:.35em .6em .5em;display:grid;grid-template-columns:auto minmax(0,1fr);gap:.3em .9em;align-items:baseline}
+.frame+.frame{margin-top:.6em}
+.frame.active{border-color:var(--ink)}
+.frame .fn{grid-column:1/-1;font-family:var(--sans);font-size:.7em;color:var(--muted)}
+.frame.active .fn{color:var(--ink);font-weight:600}
+.vval{overflow-wrap:anywhere}
+.vval.chg{background:linear-gradient(transparent 55%,var(--hl) 55%)}
+.tchip{display:inline-block;border:1.5px solid var(--ink);border-radius:5px;padding:0 .35em;font-size:.82em;line-height:1.35}
+.vsub{color:var(--muted);font-size:.85em}
+.empty{font-family:var(--sans);font-size:15px;color:var(--muted)}
+.out{font-family:var(--mono);font-size:clamp(15px,1.15vw,21px);border-top:1px solid var(--rule);padding-top:.45em;min-height:2em;max-height:12em;overflow-y:auto}
+.out div{overflow-wrap:anywhere;white-space:pre-wrap}
+.out .new span{background:linear-gradient(transparent 58%,var(--hl) 58%)}
+.out .err{font-weight:700}
+
+.hint{margin:0;font-size:clamp(16px,1.15vw,21px);line-height:1.45;max-width:70ch}
+.hint:empty{display:none}
+.hint .ans{display:block;margin-top:.4em;color:var(--muted)}
+.hint code{font-family:var(--mono);font-size:.92em}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.btn{font:inherit;font-weight:600;font-size:16px;padding:.55em 1.15em;border-radius:9px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:6.5em}
+.btn:disabled{opacity:.38;cursor:default}
+button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+#scrub{flex:1;min-width:140px;accent-color:var(--ink)}
+.counter{font-family:var(--mono);font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:5.5em;text-align:right}
+@media (prefers-reduced-motion: reduce){.hl,.file{transition:none}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="tabs">
+    <div class="group"><span class="glabel">Lecture demo</span><div class="seg" id="seg-demo" role="group" aria-label="Lecture demos"></div></div>
+    <div class="group"><span class="glabel">Worksheet 20</span><div class="seg" id="seg-ws" role="group" aria-label="Worksheet 20 questions"></div></div>
+  </header>
+
+  <div class="question"><p id="about"></p><div class="chips" id="chips"></div><button class="link" id="answer" hidden>Show answer</button></div>
+
+  <main class="main">
+    <section class="panel code" aria-label="Code"><div class="lines" id="lines"></div></section>
+    <section class="panel state" aria-label="File, variables and output">
+      <div class="file" id="file">
+        <div class="fhead"><span class="fname" id="fname"></span>
+          <span class="legend"><span><span class="caret" aria-hidden="true"></span> cursor</span><span><span class="sw"></span> read this step</span><span><span class="sw d">abc</span> already read</span></span>
+        </div>
+        <div class="fbody" id="fbody"></div>
+        <div class="fpos" id="fpos"></div>
+      </div>
+      <div class="lower">
+        <div><div class="plabel">Variables</div><div class="vars" id="vars"></div></div>
+        <div><div class="plabel">Output</div><div class="out" id="out"></div></div>
+      </div>
+      <p class="hint" id="hint"></p>
+    </section>
+  </main>
+
+  <nav class="controls" aria-label="Step controls">
+    <button class="btn" id="restart" title="Home">Restart</button>
+    <button class="btn" id="back" title="Left arrow">Back</button>
+    <button class="btn primary" id="next" title="Right arrow or Space">Step</button>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Jump to step">
+    <span class="counter" id="counter"></span>
+  </nav>
+</div>
+
+<script>
+/* ===== the two files from the slides and the worksheet ===== */
+const FILES = {
+  'dictionary.txt': "Zworkykin\nZyrtec\nZyrtec's\na\naardvark\naardvarks\nabaci\naback",
+  'boba_orders.csv': [
+    'drink_name,size,price,is_dairy_free', 'Taro Milk Tea,large,6.50,N', 'Matcha Latte,medium,5.75,N',
+    'Strawberry Fruit Tea,large,6.00,Y', 'Brown Sugar Milk Tea,medium,5.75,N', 'Mango Fruit Tea,small,4.50,Y',
+    'Thai Milk Tea,large,6.50,N', 'Peach Fruit Tea,medium,5.25,Y'
+  ].join('\n') + '\n'
+};
+
+/* ===== tiny Python-ish values ===== */
+class PyErr { constructor(name, msg, line) { this.name = name; this.msg = msg || ''; this.line = line; } }
+class Float { constructor(v) { this.v = v; } }
+function pyQuote(s) {
+  const q = s.includes("'") && !s.includes('"') ? '"' : "'";
+  return q + s.replace(/\\/g, '\\\\').split(q).join('\\' + q).replace(/\n/g, '\\n').replace(/\t/g, '\\t') + q;
+}
+function repr(v) {
+  if (typeof v === 'string') return pyQuote(v);
+  if (typeof v === 'boolean') return v ? 'True' : 'False';
+  if (v instanceof Float) return Number.isInteger(v.v) ? v.v.toFixed(1) : String(v.v);
+  if (Array.isArray(v)) return '[' + v.map(repr).join(', ') + ']';
+  return String(v);
+}
+const pyStr = v => (typeof v === 'string' ? v : repr(v));
+
+class PyFile {
+  constructor(name) { this.name = name; this.text = FILES[name]; this.pos = 0; this.closed = false; this.last = null; }
+  check() { if (this.closed) throw new PyErr('ValueError', 'I/O operation on closed file.'); }
+  take(end) { const s = this.text.slice(this.pos, end); this.last = [this.pos, end]; this.pos = end; return s; }
+  read() { this.check(); return this.take(this.text.length); }
+  readline() { this.check(); const i = this.text.indexOf('\n', this.pos); return this.take(i < 0 ? this.text.length : i + 1); }
+  readlines() { this.check(); const start = this.pos, out = []; let l; while ((l = this.readline()) !== '') out.push(l); this.last = [start, this.pos]; return out; }
+  close() { this.closed = true; }
+}
+class Reader { constructor(f) { this.f = f; } }
+const splitRow = l => l.replace(/\r?\n$/, '').split(',');
+function nextRow(rd, line) {
+  const l = rd.f.readline();
+  if (l === '') throw new PyErr('StopIteration', '', line);
+  return splitRow(l);
+}
+
+/* ===== recorder: programs run once, eagerly, and leave a list of snapshots ===== */
+function record(ex, choice) {
+  const steps = [], out = [], frames = [{ name: '__main__', vars: new Map() }];
+  let file = null;
+  const top = () => frames[frames.length - 1];
+  const show = v => {
+    if (v instanceof PyFile) return { h: `<span class="tchip">TextIO</span> <span class="vsub">${esc(v.name)}${v.closed ? ', closed' : ''}</span>`, k: 'F' + v.closed };
+    if (v instanceof Reader) return { h: `<span class="tchip">csv reader</span> <span class="vsub">reads from ${esc(v.f.name)}</span>`, k: 'R' };
+    const r = repr(v); return { h: esc(r), k: r };
+  };
+  const S = {
+    open() { file = new PyFile(ex.file); return file; },
+    reader(f) { return new Reader(f); },
+    set(n, v) { top().vars.set(n, v); },
+    push(name) { frames.push({ name, vars: new Map() }); },
+    pop() { frames.pop(); },
+    print(...a) { out.push(a.map(pyStr).join(' ')); },
+    step(line, note, extra) {
+      steps.push(Object.assign({
+        line, note: note || null,
+        frames: frames.map(f => ({ name: f.name, vars: [...f.vars].map(([n, v]) => [n, show(v)]) })),
+        file: file ? { pos: file.pos, closed: file.closed, last: file.last } : null,
+        out: out.slice(), ended: false, err: false
+      }, extra || {}));
+      if (file) file.last = null;
+    },
+    /* for x in <file or reader>: one pass per line, starting from wherever the cursor is */
+    loop(line, src, name, body) {
+      for (;;) {
+        const f = src instanceof Reader ? src.f : src;
+        const l = f.readline();
+        if (l === '') { S.step(line, { text: 'nothing left to read, so the loop ends' }); return false; }
+        const item = src instanceof Reader ? splitRow(l) : l;
+        S.set(name, item);
+        S.step(line, { e: name, r: repr(item) });
+        if (body(item)) return true;
+      }
+    }
+  };
+  S.step(-1);
+  try { ex.run(S, choice); S.step(-1, null, { ended: true }); }
+  catch (e) {
+    if (!(e instanceof PyErr)) throw e;
+    out.push(e.msg ? `${e.name}: ${e.msg}` : e.name);
+    S.step(e.line ?? -1, { r: e.name, err: true }, { err: true });
+    S.step(-1, null, { ended: true, err: true });
+  }
+  return steps;
+}
+
+/* ===== programs ===== */
+const Q1_FRAGS = [
+  { label: '(a)', lines: ['for row in reader:', '    print(row)'],
+    run(S, rd, b) { S.loop(b, rd, 'row', row => { S.print(row); S.step(b + 1); }); } },
+  { label: '(b)', lines: ['row = next(reader)', 'for row in reader:', '    print(row)'],
+    run(S, rd, b) {
+      const r = nextRow(rd, b); S.set('row', r); S.step(b, { e: 'row', r: repr(r) });
+      S.loop(b + 1, rd, 'row', row => { S.print(row); S.step(b + 2); });
+    } },
+  { label: '(c)', lines: ['for row in reader:', '    print(row)', '    next(reader)'],
+    run(S, rd, b) {
+      S.loop(b, rd, 'row', row => { S.print(row); S.step(b + 1); const r = nextRow(rd, b + 2); S.step(b + 2, { r: repr(r) }); });
+    } },
+  { label: '(d)', lines: ['for row in reader:', '    print(row[0])'],
+    run(S, rd, b) { S.loop(b, rd, 'row', row => { S.print(row[0]); S.step(b + 1); }); } }
+];
+const CSV_HEAD = ['import csv', '', "f = open('boba_orders.csv')", 'reader = csv.reader(f)', ''];
+function csvStart(S) {
+  const f = S.open(); S.set('f', f); S.step(2, { text: 'cursor starts at the beginning' });
+  const rd = S.reader(f); S.set('reader', rd); S.step(3, { text: 'the reader reads lines from f' });
+  return { f, rd };
+}
+
+const PROGRAMS = {
+  read: {
+    group: 'demo', label: '<code>read()</code>', file: 'dictionary.txt',
+    about: '<code>read()</code> returns everything from the cursor to the end of the file as one <code>str</code>, newlines included. The cursor is then at the end, so a second <code>read()</code> returns <code>\'\'</code>.',
+    lines: () => ["my_file = open('dictionary.txt')", 'my_file.read()', 'my_file.read()', 'my_file.close()'],
+    run(S) {
+      const f = S.open(); S.set('my_file', f); S.step(0, { text: 'cursor starts at the beginning' });
+      S.step(1, { r: repr(f.read()) });
+      S.step(2, { r: repr(f.read()) });
+      f.close(); S.step(3, { text: 'done with the file' });
+    }
+  },
+  readline: {
+    group: 'demo', label: '<code>readline()</code>', file: 'dictionary.txt',
+    about: 'Each call starts at the cursor and moves it forward. <code>my_file</code> is the same object the whole time. What changes is the cursor inside it.',
+    lines: () => ["my_file = open('dictionary.txt')", 'my_file.readline()', 'my_file.readline()', 'my_file.readline()', 'my_file.readlines()', 'my_file.readlines()', 'my_file.read()', 'my_file.close()'],
+    run(S) {
+      const f = S.open(); S.set('my_file', f); S.step(0, { text: 'cursor starts at the beginning' });
+      for (const ln of [1, 2, 3]) S.step(ln, { r: repr(f.readline()) });
+      S.step(4, { r: repr(f.readlines()) });
+      S.step(5, { r: repr(f.readlines()) });
+      S.step(6, { r: repr(f.read()) });
+      f.close(); S.step(7, { text: 'done with the file' });
+    }
+  },
+  forloop: {
+    group: 'demo', label: '<code>for</code> loop', file: 'dictionary.txt',
+    about: 'A <code>for</code> loop reads one line per pass, starting wherever the cursor is. Line 2 already took the first line, so the loop never sees it.',
+    lines: () => ["my_file = open('dictionary.txt')", 'my_file.readline()', 'for line in my_file:', '    print(line.strip())', 'my_file.close()'],
+    run(S) {
+      const f = S.open(); S.set('my_file', f); S.step(0, { text: 'cursor starts at the beginning' });
+      S.step(1, { r: repr(f.readline()) });
+      S.loop(2, f, 'line', line => { S.print(line.trim()); S.step(3); });
+      f.close(); S.step(4, { text: 'done with the file' });
+    }
+  },
+
+  q1: {
+    group: 'ws', label: 'Q1', file: 'boba_orders.csv',
+    about: 'Pick a fragment and step through it. Which one prints (1) only the first column, (2) every row except the first, (3) all rows, (4) every other row?',
+    choices: Q1_FRAGS.map((c, i) => ({ label: c.label, value: i })),
+    lines: c => [...CSV_HEAD, ...Q1_FRAGS[c].lines, '', 'f.close()'],
+    run(S, c) {
+      const { f, rd } = csvStart(S), b = CSV_HEAD.length, frag = Q1_FRAGS[c];
+      frag.run(S, rd, b);
+      f.close(); S.step(b + frag.lines.length + 1, { text: 'done with the file' });
+    },
+    answer: 'Answer: (a) 3, (b) 2, (c) 4, (d) 1. In (c), the next(reader) inside the loop moves the cursor past a line the loop then never sees.'
+  },
+  q2: {
+    group: 'ws', label: 'Q2', file: 'boba_orders.csv',
+    about: 'What happens on the last line? Step to the end, then explain why.',
+    lines: () => [...CSV_HEAD, 'for row in reader:', '    print(row)', '', 'print(next(reader))'],
+    run(S) {
+      const { rd } = csvStart(S), b = CSV_HEAD.length;
+      S.loop(b, rd, 'row', row => { S.print(row); S.step(b + 1); });
+      const r = nextRow(rd, b + 3); S.print(r); S.step(b + 3, { r: repr(r) });
+    },
+    answer: 'Answer: the loop prints every row, which leaves the cursor at the end of the file. next(reader) asks for one more row, but there is nothing left to read, so Python raises StopIteration. (f.close() is never reached.)'
+  },
+  q3: {
+    group: 'ws', label: 'Q3', file: 'boba_orders.csv', todo: [5, 12],
+    about: 'Complete <code>cost_of_large</code>. The docstring example says the large drinks cost <code>19.0</code> in total.',
+    lines: () => [
+      'import csv', 'from typing import TextIO', '',
+      'def cost_of_large(orders_file: TextIO) -> float:',
+      '    """Return the total cost of all large drinks."""',
+      '    reader = csv.reader(orders_file)',
+      '    next(reader)  # skip the header row',
+      '    total = 0.0',
+      '    for row in reader:',
+      "        if row[1] == 'large':",
+      '            total = total + float(row[2])',
+      '    return total',
+      '',
+      "f = open('boba_orders.csv')",
+      'print(cost_of_large(f))',
+      'f.close()'
+    ],
+    run(S) {
+      const f = S.open(); S.set('f', f); S.step(13, { text: 'cursor starts at the beginning' });
+      S.push('cost_of_large'); S.set('orders_file', f); S.step(14, { text: 'orders_file refers to the same file as f' });
+      const rd = S.reader(f); S.set('reader', rd); S.step(5);
+      const h = nextRow(rd, 6); S.step(6, { r: repr(h) });
+      let total = new Float(0); S.set('total', total); S.step(7);
+      S.loop(8, rd, 'row', row => {
+        const ok = row[1] === 'large';
+        S.step(9, { e: `${repr(row[1])} == 'large'`, r: repr(ok) });
+        if (ok) { total = new Float(total.v + parseFloat(row[2])); S.set('total', total); S.step(10, { e: 'total', r: repr(total) }); }
+      });
+      S.step(11, { r: repr(total) });
+      S.pop(); S.print(total); S.step(14, { e: 'cost_of_large(f)', r: repr(total) });
+      f.close(); S.step(15, { text: 'done with the file' });
+    },
+    answer: 'One possible solution. Skipping the header matters: without next(reader), the loop would also check the header row.'
+  },
+  q4: {
+    group: 'ws', label: 'Q4', file: 'dictionary.txt', todo: [4, 8],
+    about: 'Complete <code>is_correct</code>, then pick a word to look up.',
+    choices: ['Zyrtec', 'lolz', 'aback'].map(w => ({ label: repr(w), value: w })),
+    lines: w => [
+      'from typing import TextIO', '',
+      'def is_correct(file: TextIO, word: str) -> bool:',
+      '    """Return True if and only if word is in file."""',
+      '    for line in file:',
+      '        if line.strip() == word:',
+      '            return True',
+      '    return False',
+      '',
+      "words_file = open('dictionary.txt')",
+      `print(is_correct(words_file, ${repr(w)}))`,
+      'words_file.close()'
+    ],
+    run(S, w) {
+      const f = S.open(); S.set('words_file', f); S.step(9, { text: 'cursor starts at the beginning' });
+      S.push('is_correct'); S.set('file', f); S.set('word', w); S.step(10, { text: 'file refers to the same file as words_file' });
+      const found = S.loop(4, f, 'line', line => {
+        const s = line.trim(), ok = s === w;
+        S.step(5, { e: `${repr(s)} == ${repr(w)}`, r: repr(ok) });
+        if (ok) { S.step(6, { r: 'True' }); return true; }
+      });
+      if (!found) S.step(7, { r: 'False' });
+      S.pop(); S.print(found); S.step(10, { e: 'is_correct(…)', r: repr(found) });
+      f.close(); S.step(11, { text: 'done with the file' });
+    },
+    answer: 'One possible solution. Why strip()? Every line but the last ends in \\n, so \'Zyrtec\\n\' == \'Zyrtec\' would be False.'
+  }
+};
+</script>
+<script>
+/* ===== page ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const KW = new Set(['def', 'for', 'while', 'if', 'elif', 'else', 'return', 'and', 'or', 'not', 'in', 'is', 'True', 'False', 'None', 'import', 'from', 'with', 'as']);
+const clip = (s, n = 36) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+const CARET = '<span class="caret" aria-hidden="true"></span>';
+
+const cur = { key: '', ex: null, choice: null, steps: [], k: 0 };
+const choiceFor = {}, revealed = {}, answerOn = {};
+let lineEls = [], hlEl = null;
+
+function highlight(src) {
+  const re = /"""[^]*?"""|'[^']*'|"[^"]*"|#.*|[A-Za-z_]\w*|\d+|\s+|./g;
+  let out = '', prev = '';
+  for (const t of src.match(re) || []) {
+    if (t[0] === "'" || t[0] === '"' || t[0] === '#') out += `<span class="s">${esc(t)}</span>`;
+    else if (/^[A-Za-z_]/.test(t) && prev !== '.' && KW.has(t)) out += `<span class="k">${t}</span>`;
+    else out += esc(t);
+    if (!/^\s+$/.test(t)) prev = t;
+  }
+  return out;
+}
+
+const gated = () => cur.ex.todo && !revealed[cur.key];
+function shownLines() {
+  const L = cur.ex.lines(cur.choice);
+  if (!gated()) return L;
+  const [a, b] = cur.ex.todo;
+  return [...L.slice(0, a), '    # TODO: complete the function', ...L.slice(b)];
+}
+
+function buildCode() {
+  const $lines = $('#lines');
+  $lines.innerHTML = '<div class="hl" aria-hidden="true"></div>';
+  hlEl = $lines.firstChild;
+  lineEls = shownLines().map((t, i) => {
+    const d = document.createElement('div');
+    d.className = 'line';
+    d.innerHTML = `<span class="ln">${i + 1}</span><span class="src">${highlight(t)}</span><span class="note"></span>`;
+    $lines.appendChild(d);
+    return d;
+  });
+}
+
+/* ---------- the file view ---------- */
+function rowsOf(text) {
+  const rows = []; let a = 0;
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') { rows.push([a, i + 1]); a = i + 1; }
+  if (a < text.length || text.endsWith('\n')) rows.push([a, text.length]);
+  return rows;
+}
+function renderFile(s) {
+  const name = cur.ex.file, text = FILES[name], f = s.file, rows = rowsOf(text);
+  const pos = f && !f.closed ? f.pos : -1, last = f && f.last;
+  $('#fname').textContent = name;
+  $('#file').classList.toggle('closed', !!(f && f.closed));
+  $('#file').classList.toggle('unopened', !f);
+  const cls = i => (last && i >= last[0] && i < last[1] ? 'got' : f && i < f.pos ? 'done' : '');
+  $('#fbody').innerHTML = rows.map(([a, b], r) => {
+    let html = '', cc = null, buf = '';
+    const flush = () => { if (buf) html += cc ? `<span class="${cc}">${buf}</span>` : buf; buf = ''; };
+    for (let i = a; i < b; i++) {
+      if (i === pos) { flush(); html += CARET; }
+      const c = cls(i);
+      if (c !== cc) { flush(); cc = c; }
+      buf += text[i] === '\n' ? '<span class="nl">\\n</span>' : esc(text[i]);
+    }
+    flush();
+    if (pos === b && r === rows.length - 1) html += CARET;
+    return `<div class="frow"><span class="fln">${r + 1}</span><span>${html || ' '}</span></div>`;
+  }).join('');
+
+  let msg;
+  if (!f) msg = 'Not opened yet.';
+  else if (f.closed) msg = 'Closed. Reading from it now raises ValueError.';
+  else if (f.pos === 0) msg = 'Cursor is at the start of the file.';
+  else if (f.pos === text.length) msg = "Cursor is at the end of the file, so every read now gives back '' (or [] for readlines).";
+  else {
+    const r = rows.findIndex(([a, b]) => f.pos >= a && f.pos < b) + 1;
+    msg = text[f.pos - 1] === '\n' ? `Cursor is at the start of line ${r}.` : `Cursor is partway through line ${r}.`;
+  }
+  let read = '';
+  if (last) read = `<span class="readnow">Read this step: <code>${esc(repr(text.slice(last[0], last[1])))}</code></span>`;
+  $('#fpos').innerHTML = `<span>${msg}</span>${read}`;
+}
+
+function renderVars(s, prev) {
+  if (s.frames.every(f => !f.vars.length)) { $('#vars').innerHTML = '<p class="empty">No variables yet.</p>'; return; }
+  $('#vars').innerHTML = s.frames.map((f, fi) => {
+    const pf = prev && prev.frames[fi] && prev.frames[fi].name === f.name ? new Map(prev.frames[fi].vars) : null;
+    const rows = f.vars.map(([n, v]) => {
+      const chg = prev && (!pf || !pf.has(n) || pf.get(n).k !== v.k);
+      return `<span>${esc(n)}</span><span class="vval${chg ? ' chg' : ''}">${v.h}</span>`;
+    }).join('');
+    return `<div class="frame${fi === s.frames.length - 1 ? ' active' : ''}"><span class="fn">${esc(f.name)}</span>${rows || '<span class="empty" style="grid-column:1/-1">no variables yet</span>'}</div>`;
+  }).join('');
+}
+
+function render() {
+  const s = cur.steps[cur.k], prev = cur.k ? cur.steps[cur.k - 1] : null;
+  hlEl.hidden = s.line < 0;
+  if (s.line >= 0) $('#lines').style.setProperty('--line', s.line);
+  lineEls.forEach((el, i) => {
+    el.classList.toggle('cur', i === s.line);
+    const nEl = el.querySelector('.note'); nEl.innerHTML = ''; nEl.className = 'note'; nEl.removeAttribute('title');
+  });
+  const n = s.note;
+  if (n && s.line >= 0 && lineEls[s.line]) {
+    const nEl = lineEls[s.line].querySelector('.note');
+    const full = n.text ? `# ${n.text}` : `# ${n.e ? n.e + ' ' : ''}→ ${n.r}`;
+    nEl.textContent = n.text ? full : clip(full, 48);
+    if (full.length > 48 && !n.text) nEl.title = full;
+    if (n.err) nEl.classList.add('err');
+  }
+
+  renderFile(s);
+  renderVars(s, prev);
+
+  $('#out').innerHTML = s.out.map((t, i) => {
+    const last = i === s.out.length - 1;
+    const c = [last && prev && prev.out.length < s.out.length ? 'new' : '', last && s.err ? 'err' : ''].join(' ').trim();
+    return `<div class="${c}"><span>${esc(t)}</span></div>`;
+  }).join('') || '<p class="empty" style="margin:0">Nothing printed yet.</p>';
+  $('#out').scrollTop = $('#out').scrollHeight;
+
+  let hint = '';
+  if (gated()) hint = 'Try it on paper first. <b>Show solution</b> fills in one answer you can step through.';
+  else if (cur.k === 0) hint = 'Press <b>Step</b> (or the → key) to run the first line.';
+  if (answerOn[cur.key] && cur.ex.answer) hint += `<span class="ans">${esc(cur.ex.answer)}</span>`;
+  $('#hint').innerHTML = hint;
+
+  const N = cur.steps.length;
+  $('#back').disabled = $('#restart').disabled = cur.k === 0;
+  $('#next').disabled = cur.k === N - 1;
+  $('#scrub').max = N - 1; $('#scrub').value = cur.k; $('#scrub').disabled = N < 2;
+  $('#counter').textContent = `${cur.k + 1} / ${N}`;
+}
+
+function load() {
+  buildCode();
+  cur.steps = gated() ? [record({ ...cur.ex, run() {} }, cur.choice)[0]] : record(cur.ex, cur.choice);
+  cur.k = 0;
+  render();
+}
+
+function setChips() {
+  const ex = cur.ex;
+  $('#chips').innerHTML = ex.choices ? ex.choices.map((c, i) => `<button class="chip" data-i="${i}" aria-pressed="${c.value === cur.choice}">${esc(c.label)}</button>`).join('') : '';
+  const btn = $('#answer');
+  btn.hidden = !ex.answer;
+  btn.textContent = ex.todo ? (revealed[cur.key] ? 'Hide solution' : 'Show solution') : (answerOn[cur.key] ? 'Hide answer' : 'Show answer');
+}
+$('#chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-i]'); if (!b) return;
+  cur.choice = choiceFor[cur.key] = cur.ex.choices[+b.dataset.i].value;
+  setChips(); load();
+});
+$('#answer').onclick = () => {
+  if (cur.ex.todo) { revealed[cur.key] = !revealed[cur.key]; answerOn[cur.key] = revealed[cur.key]; setChips(); load(); }
+  else { answerOn[cur.key] = !answerOn[cur.key]; setChips(); render(); }
+};
+
+function use(key) {
+  cur.key = key; cur.ex = PROGRAMS[key];
+  cur.choice = key in choiceFor ? choiceFor[key] : cur.ex.choices ? cur.ex.choices[0].value : null;
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ex === key)));
+  $('#about').innerHTML = cur.ex.about;
+  setChips(); load();
+}
+
+function go(k) { cur.k = Math.max(0, Math.min(cur.steps.length - 1, k)); render(); }
+$('#next').onclick = () => go(cur.k + 1);
+$('#back').onclick = () => go(cur.k - 1);
+$('#restart').onclick = () => go(0);
+$('#scrub').oninput = e => go(+e.target.value);
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input[type=range]')) return;
+  if (e.target.matches('button') && (e.key === ' ' || e.key === 'Enter')) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(cur.k + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur.k - 1); }
+  else if (e.key === 'Home') { e.preventDefault(); go(0); }
+  else if (e.key === 'End') { e.preventDefault(); go(cur.steps.length - 1); }
+});
+
+for (const [key, ex] of Object.entries(PROGRAMS)) {
+  const b = document.createElement('button');
+  b.dataset.ex = key; b.innerHTML = ex.label; b.setAttribute('aria-pressed', 'false');
+  b.onclick = () => use(key);
+  $('#seg-' + ex.group).appendChild(b);
+}
+use(location.hash.slice(1) in PROGRAMS ? location.hash.slice(1) : 'readline');
+</script>
+</body>
+</html>
